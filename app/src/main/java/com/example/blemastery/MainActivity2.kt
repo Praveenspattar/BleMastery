@@ -16,12 +16,13 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
+import android.widget.Button
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
+import java.util.Arrays
 import java.util.UUID
 
 class MainActivity2 : AppCompatActivity() {
@@ -39,6 +40,13 @@ class MainActivity2 : AppCompatActivity() {
     private lateinit var bluetoothAdapter: BluetoothAdapter
     private lateinit var bluetoothLeScanner: BluetoothLeScanner
 
+    private var bluetoothGatt: BluetoothGatt? = null
+    private var characteristicToWrite: BluetoothGattCharacteristic? = null
+    lateinit var sendBtn : Button
+    lateinit var stopBtn : Button
+    lateinit var valTv : TextView
+    var readbool = false
+
     val scanCallback = object : ScanCallback(){
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             super.onScanResult(callbackType, result)
@@ -46,8 +54,11 @@ class MainActivity2 : AppCompatActivity() {
                 val deviceName = it.name ?: "Unknown"
                 Log.d("devname",deviceName)
 
-                if (!deviceName.equals("Unknown")) {
+                if (deviceName.equals("PLAYCOMPUTER")) {
                     connectToDevice(it)
+
+                    valTv.setText(deviceName)
+
                     bluetoothLeScanner.stopScan(this)
                 }
             }
@@ -66,10 +77,9 @@ class MainActivity2 : AppCompatActivity() {
 
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
             super.onServicesDiscovered(gatt, status)
-            val service = gatt?.getService(UUID.fromString("37fc19ab-98ca-4543-a68b-d183da78acdc")) // Replace with your service UUID
-            val characteristic = service?.getCharacteristic(UUID.fromString("d79f5db9-17e2-45b3-bb6f-6c2590b63f0a")) // Replace with your characteristic UUID
-            gatt?.readCharacteristic(characteristic)
-
+            val service = gatt?.getService(UUID.fromString("00000077-0000-1000-8000-00805f9b34fb")) // Replace with your service UUID
+            characteristicToWrite = service?.getCharacteristic(UUID.fromString("0000ff01-0000-1000-8000-00805f9b34fb")) // Replace with your characteristic UUID
+            gatt?.readCharacteristic(characteristicToWrite)
         }
 
         override fun onCharacteristicRead(
@@ -83,9 +93,29 @@ class MainActivity2 : AppCompatActivity() {
                 data?.let {
                     val dataString = String(data, Charsets.UTF_8) // Convert byte array to string
                     Log.d("praveen", "Received data: $dataString")
+
+                    if (readbool) {
+                        bluetoothGatt?.readCharacteristic(characteristicToWrite)
+
+                        valTv.setText(Arrays.toString(data))
+                    }
+
                 }
             } else {
                 Log.e("praveen", "Failed to read characteristic: $status")
+            }
+        }
+
+        override fun onCharacteristicWrite(
+            gatt: BluetoothGatt?,
+            characteristic: BluetoothGattCharacteristic?,
+            status: Int
+        ) {
+            super.onCharacteristicWrite(gatt, characteristic, status)
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d("praveen", "Characteristic write successful")
+            } else {
+                Log.e("praveen", "Characteristic write failed: $status")
             }
         }
     }
@@ -98,6 +128,9 @@ class MainActivity2 : AppCompatActivity() {
         bleManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothAdapter = bleManager.adapter
         bluetoothLeScanner = bluetoothAdapter.bluetoothLeScanner
+        sendBtn = findViewById(R.id.btnSend)
+        stopBtn = findViewById(R.id.btnStop)
+        valTv = findViewById(R.id.textviewval)
 
         if (ActivityCompat.checkSelfPermission(
                 this,
@@ -107,6 +140,27 @@ class MainActivity2 : AppCompatActivity() {
             ActivityCompat.requestPermissions(this,REQUIRED_PERMISSIONS,REQUEST_CODE_PERMISSIONS)
         }else{
             startScanning()
+        }
+
+        sendBtn.setOnClickListener{
+
+            //[80, 65, 79, 79, 79, 79, 79, 79, 79, 79, 79, 79, 79, 79, 79, 79, 84, 84, 84, 84, 79, 79, 79, 69, 82]
+
+            readbool = true
+
+            val bArrayList: ByteArray = byteArrayOf(80, 65, 79, 79, 79, 79, 79, 79, 79, 79, 79, 79, 79, 79, 79, 79, 84, 84, 84, 84, 79, 79, 79, 69, 82)
+
+            writeDataToCharacteristic(bArrayList)
+
+        }
+
+        stopBtn.setOnClickListener{
+
+            readbool = false
+            val bList : ByteArray = byteArrayOf('M'.code.toByte(), '8'.code.toByte())
+
+            writeDataToCharacteristic(bList)
+
         }
 
     }
@@ -126,7 +180,26 @@ class MainActivity2 : AppCompatActivity() {
         ) {
             ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
         }else
-            device.connectGatt(this, false, bluetoothGattCallback)
+            bluetoothGatt = device.connectGatt(this, false, bluetoothGattCallback)
+    }
+
+    private fun writeDataToCharacteristic(data: ByteArray) {
+
+        Log.d("Bytestosend",data.joinToString(", "))
+
+        characteristicToWrite?.let {
+            it.value = data
+            if (ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                return
+            }
+            //            iChar.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+            it.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            bluetoothGatt?.writeCharacteristic(it)
+        }
     }
 
     override fun onRequestPermissionsResult(
@@ -136,7 +209,7 @@ class MainActivity2 : AppCompatActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_CODE_PERMISSIONS) {
-            if (grantResults.equals(RESULT_OK)) {
+            if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
                 // Permissions are granted, proceed with your functionality
                 startScanning()
             } else {
@@ -145,5 +218,4 @@ class MainActivity2 : AppCompatActivity() {
             }
         }
     }
-
 }
