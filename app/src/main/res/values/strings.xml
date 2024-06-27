@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">BleMastery</string>
+    <string name="stopped_reading">Stopped Reading</string>
 </resources>

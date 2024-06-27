@@ -6,5 +6,6 @@ class Constants {
         const val BLUETOOTH_WRITE_PROGRESS = "com.example.blemastery.BLUETOOTH_WRITE_PROGRESS"
         const val BLUETOOTH_EVENT_SENDING_COMPLETE = "com.example.blemastery.BLUETOOTH_EVENT_SENDING_COMPLETE"
         const val BLUETOOTH_EVENT_SERVICES_DISCOVERED = "com.example.blemastery.BLUETOOTH_EVENT_SERVICES_DISCOVERED"
+        var readbool : Boolean = false
     }
 }
